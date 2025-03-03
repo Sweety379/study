@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>猜歌大作战</title>
+    <style>
+        /* 队伍选择界面样式 */
+        .team-select-container {
+            text-align: center;
+            padding: 50px 20px;
+            margin: 100px auto 0;
+            max-width: 600px;
+        }
+        .team-select-btn {
+            display: inline-block;
+            padding: 20px 40px;
+            margin: 20px;
+            font-size: 1.5em;
+            border-radius: 10px;
+            text-decoration: none;
+            color: white;
+            transition: transform 0.3s;
+            cursor: pointer;
+        }
+        .team-select-btn.red {
+            background: linear-gradient(45deg, #ff4444, #ff0000);
+        }
+        .team-select-btn.blue {
+            background: linear-gradient(45deg, #4444ff, #0000ff);
+        }
+        .team-select-btn:hover {
+            transform: scale(1.05);
+        }
+
+        /* 游戏界面样式 */
+        .game-container {
+            max-width: 800px;
+            margin: 20px auto;
+            display: none; /* 默认隐藏 */
+        }
+        .scoreboard {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        #audioPlayer {
+            margin: 20px 0;
+            width: 100%;
+        }
+        .option-btn {
+            margin: 5px;
+            padding: 12px 20px;
+            font-size: 1.1em;
+            cursor: pointer;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            background: white;
+            transition: all 0.3s;
+        }
+        .option-btn:hover {
+            background: #f8f8f8;
+            transform: translateY(-2px);
+        }
+        #emojiDisplay {
+            font-size: 3em;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 队伍选择界面 -->
+    <div class="team-select-container" id="teamSelect">
+        <h1>🎵 猜歌大作战 🎵</h1>
+        <h3>请选择您的战队</h3>
+        <div>
+            <div class="team-select-btn red" onclick="selectTeam(1)">
+                🚩 红队
+            </div>
+            <div class="team-select-btn blue" onclick="selectTeam(2)">
+                🏴 蓝队
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏界面 -->
+    <div class="game-container" id="gameContainer">
+        <div class="scoreboard">
+            <div>队伍: <span id="currentTeam">-</span></div>
+            <div>轮次: <span id="currentRound">1</span></div>
+            <div>题号: <span id="currentQNum">1</span></div>
+            <div>分数: <span id="score">0</span></div>
+        </div>
+
+        <div id="questionArea">
+            <audio id="audioPlayer" controls>
+                <source src="" type="audio/mp4">
+                浏览器不支持音频播放
+            </audio>
+            <div id="emojiDisplay"></div>
+        </div>
+
+        <div id="optionsContainer"></div>
+    </div>
+
+    <script>
+        // 初始化函数
+        function initGame() {
+            const urlParams = new URLSearchParams(location.search);
+            const team = urlParams.get('team');
+
+            if (team && ['1', '2'].includes(team)) {
+                startGame(team);
+            } else {
+                showTeamSelect();
+            }
+        }
+
+        // 显示队伍选择界面
+        function showTeamSelect() {
+            document.getElementById('teamSelect').style.display = 'block';
+            document.getElementById('gameContainer').style.display = 'none';
+        }
+
+        // 选择队伍
+        function selectTeam(teamNumber) {
+            window.location.search = `?team=${teamNumber}`;
+        }
+
+        // 开始游戏
+        function startGame(team) {
+            document.getElementById('teamSelect').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+            document.getElementById('currentTeam').textContent = 
+                team === '1' ? '红队 🚩' : '蓝队 🏴';
+            document.getElementById('currentTeam').style.color = 
+                team === '1' ? '#ff4444' : '#4444ff';
+            
+            loadQuestion();
+        }
+
+        // 加载题目
+        function loadQuestion() {
+            fetch('/get_question')
+                .then(response => {
+                    if (!response.ok) throw new Error('网络响应异常');
+                    return response.json();
+                })
+                .then(data => {
+                    updateDisplay(data);
+                    setupAudio(data);
+                    renderOptions(data.options);
+                })
+                .catch(error => {
+                    console.error('加载题目失败:', error);
+                    alert('题目加载失败，请刷新重试');
+                });
+        }
+
+        // 更新显示信息
+        function updateDisplay(data) {
+            document.getElementById('currentRound').textContent = data.round;
+            document.getElementById('currentQNum').textContent = data.q_num;
+        }
+
+        // 设置音频播放器
+        function setupAudio(data) {
+            const audioPlayer = document.getElementById('audioPlayer');
+            const emojiDisplay = document.getElementById('emojiDisplay');
+
+            if (data.type === 'audio') {
+                audioPlayer.style.display = 'block';
+                emojiDisplay.style.display = 'none';
+                audioPlayer.querySelector('source').src = data.content;
+                audioPlayer.load();
+            } else {
+                audioPlayer.style.display = 'none';
+                emojiDisplay.style.display = 'block';
+                emojiDisplay.textContent = data.content;
+            }
+        }
+
+        // 渲染选项按钮
+        function renderOptions(options) {
+            const container = document.getElementById('optionsContainer');
+            container.innerHTML = '';
+
+            options.forEach((text, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.textContent = `${String.fromCharCode(65 + index)}. ${text}`;
+                btn.onclick = () => checkAnswer(String.fromCharCode(65 + index));
+                container.appendChild(btn);
+            });
+        }
+
+        // 检查答案
+        function checkAnswer(answer) {
+            fetch('/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ answer: answer })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('网络响应异常');
+                return response.json();
+            })
+            .then(result => {
+                handleAnswerResult(result);
+            })
+            .catch(error => {
+                console.error('提交答案失败:', error);
+                alert('答案提交失败，请重试');
+            });
+        }
+
+        // 处理答案结果
+        function handleAnswerResult(result) {
+            if (result.correct) {
+                alert('✅ 正确！');
+                updateScore(10);
+                loadQuestion();
+            } else {
+                alert('❌ 错误，请重试！');
+                loadQuestion();
+            }
+        }
+
+        // 更新分数
+        function updateScore(points) {
+            const scoreElement = document.getElementById('score');
+            const currentScore = parseInt(scoreElement.textContent) || 0;
+            scoreElement.textContent = currentScore + points;
+        }
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>
